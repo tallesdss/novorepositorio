@@ -106,8 +106,8 @@ Criar um aplicativo de receitas com autenticação, publicação de receitas com
 - [x] Edição de perfil (nome, bio, foto)  
 
 ### Receitas
-- [ ] CRUD de receitas  
-- [ ] Upload de imagem (câmera/galeria → Supabase Storage)  
+- [x] CRUD de receitas  
+- [x] Upload de imagem (câmera/galeria → Supabase Storage)  
 - [x] Categorias de receitas  
 
 ### Funcionalidades Sociais

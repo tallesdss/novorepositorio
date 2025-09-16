@@ -116,14 +116,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
 
     if (mounted) {
-      if (success && authProvider.isAuthenticated) {
+      if (success) {
+        // Conta criada com sucesso - mostrar mensagem sobre verificação de email
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Conta criada com sucesso!'),
+            content: Text('Conta criada! Verifique seu email para confirmar a conta.'),
             backgroundColor: Colors.green,
+            duration: Duration(seconds: 4),
           ),
         );
-        context.go('/home');
+
+        // Navegar para tela de login
+        context.go('/login');
       } else if (authProvider.errorMessage != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -168,6 +172,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: Colors.grey[600],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue[200]!),
+                  ),
+                  child: Text(
+                    '💡 Em desenvolvimento: Você pode fazer login mesmo sem confirmar o email.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.blue[800],
+                      fontSize: 12,
+                    ),
                   ),
                 ),
                 

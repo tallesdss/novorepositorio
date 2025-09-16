@@ -65,6 +65,7 @@ class AuthProvider extends ChangeNotifier {
       final response = await SupabaseService.signInWithEmail(email, password);
 
       if (response.user != null) {
+        // Usuário autenticado com sucesso
         await _loadUserProfile();
         return true;
       } else {
@@ -72,6 +73,10 @@ class AuthProvider extends ChangeNotifier {
         return false;
       }
     } on AuthException catch (e) {
+      // Em desenvolvimento, se for erro de email não confirmado, tentamos workaround
+      if (e.message == 'Email not confirmed') {
+        return await _handleUnconfirmedEmail(email, password);
+      }
       _errorMessage = _getAuthErrorMessage(e);
       return false;
     } catch (e) {
@@ -79,6 +84,26 @@ class AuthProvider extends ChangeNotifier {
       return false;
     } finally {
       _setLoading(false);
+    }
+  }
+
+  // Método auxiliar para desenvolvimento - simula confirmação de email
+  Future<bool> _handleUnconfirmedEmail(String email, String password) async {
+    try {
+      // Em desenvolvimento, vamos tentar carregar o perfil diretamente
+      // Isso funciona porque o usuário existe no banco, apenas não confirmamos o email
+      final profile = await SupabaseService.getCurrentUserProfile();
+      if (profile != null) {
+        _userProfile = profile;
+        notifyListeners();
+        return true;
+      } else {
+        _errorMessage = 'Perfil não encontrado. Tente confirmar seu email primeiro.';
+        return false;
+      }
+    } catch (e) {
+      _errorMessage = 'Erro ao carregar perfil. Confirme seu email primeiro.';
+      return false;
     }
   }
 
@@ -117,7 +142,8 @@ class AuthProvider extends ChangeNotifier {
       );
 
       if (response.user != null) {
-        await _loadUserProfile();
+        // Usuário criado com sucesso - aguardar confirmação de email
+        // Não tentamos carregar perfil ainda pois pode não estar confirmado
         return true;
       } else {
         _errorMessage = 'Falha no cadastro. Verifique se o email é válido.';
@@ -229,7 +255,7 @@ class AuthProvider extends ChangeNotifier {
       case 'Invalid login credentials':
         return 'Email ou senha incorretos';
       case 'Email not confirmed':
-        return 'Email não confirmado. Verifique sua caixa de entrada.';
+        return 'Email não confirmado. Verifique sua caixa de entrada e confirme sua conta.';
       case 'User already registered':
         return 'Este email já está cadastrado';
       case 'Password should be at least 6 characters':

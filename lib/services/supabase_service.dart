@@ -1,4 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 
 class SupabaseService {
   // Getter para acessar o cliente Supabase de forma fácil
@@ -119,12 +121,12 @@ class SupabaseService {
   /// Verifica se o email já está cadastrado
   static Future<bool> isEmailRegistered(String email) async {
     try {
-      final response = await client
+      await client
           .from('profiles')
           .select('email')
           .eq('email', email)
           .single();
-      return response != null;
+      return true;
     } catch (e) {
       return false;
     }
@@ -142,5 +144,223 @@ class SupabaseService {
     } catch (e) {
       return null;
     }
+  }
+
+  // ==========================================
+  // RECEITAS
+  // ==========================================
+
+  /// Busca todas as categorias disponíveis
+  static Future<List<Map<String, dynamic>>> getCategories() async {
+    final response = await client
+        .from('categorias')
+        .select()
+        .order('nome');
+    return List<Map<String, dynamic>>.from(response);
+  }
+
+  /// Busca categoria por nome
+  static Future<Map<String, dynamic>?> getCategoryByName(String name) async {
+    try {
+      final response = await client
+          .from('categorias')
+          .select()
+          .eq('nome', name)
+          .single();
+      return response;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Cria uma nova receita
+  static Future<Map<String, dynamic>> createRecipe({
+    required String titulo,
+    required String descricao,
+    required String modoPreparo,
+    required int tempoPreparo,
+    required int porcoes,
+    required String dificuldade,
+    String? fotoUrl,
+    required String categoriaNome,
+    bool publico = true,
+  }) async {
+    if (currentUser == null) {
+      throw Exception('Usuário não autenticado');
+    }
+
+    // Buscar categoria por nome
+    final categoria = await getCategoryByName(categoriaNome);
+    if (categoria == null) {
+      throw Exception('Categoria não encontrada: $categoriaNome');
+    }
+
+    final recipeData = {
+      'titulo': titulo,
+      'descricao': descricao,
+      'modo_preparo': modoPreparo,
+      'tempo_preparo': tempoPreparo,
+      'porcoes': porcoes,
+      'dificuldade': dificuldade,
+      'foto_url': fotoUrl,
+      'categoria_id': categoria['id'],
+      'autor_id': currentUser!.id,
+      'publico': publico,
+    };
+
+    final response = await client
+        .from('receitas')
+        .insert(recipeData)
+        .select()
+        .single();
+
+    return response;
+  }
+
+  /// Adiciona ingredientes a uma receita
+  static Future<void> addIngredientsToRecipe(
+    String recipeId,
+    List<Map<String, dynamic>> ingredients,
+  ) async {
+    final ingredientsData = ingredients.asMap().entries.map((entry) {
+      return {
+        'receita_id': recipeId,
+        'nome': entry.value['nome'],
+        'quantidade': entry.value['quantidade'],
+        'ordem': entry.key + 1,
+      };
+    }).toList();
+
+    await client
+        .from('ingredientes')
+        .insert(ingredientsData);
+  }
+
+  /// Cria receita completa (receita + ingredientes)
+  static Future<Map<String, dynamic>> createRecipeWithIngredients({
+    required String titulo,
+    required String descricao,
+    required String modoPreparo,
+    required int tempoPreparo,
+    required int porcoes,
+    required String dificuldade,
+    String? fotoUrl,
+    required String categoriaNome,
+    required List<Map<String, dynamic>> ingredientes,
+    bool publico = true,
+  }) async {
+    // Criar receita
+    final recipe = await createRecipe(
+      titulo: titulo,
+      descricao: descricao,
+      modoPreparo: modoPreparo,
+      tempoPreparo: tempoPreparo,
+      porcoes: porcoes,
+      dificuldade: dificuldade,
+      fotoUrl: fotoUrl,
+      categoriaNome: categoriaNome,
+      publico: publico,
+    );
+
+    // Adicionar ingredientes
+    if (ingredientes.isNotEmpty) {
+      await addIngredientsToRecipe(recipe['id'], ingredientes);
+    }
+
+    return recipe;
+  }
+
+  /// Busca receitas do usuário atual
+  static Future<List<Map<String, dynamic>>> getUserRecipes() async {
+    if (currentUser == null) return [];
+
+    final response = await client
+        .from('receitas')
+        .select('''
+          *,
+          categoria:categorias(nome),
+          autor:profiles(nome),
+          ingredientes(count)
+        ''')
+        .eq('autor_id', currentUser!.id)
+        .order('created_at', ascending: false);
+
+    return List<Map<String, dynamic>>.from(response);
+  }
+
+  /// Busca receita por ID com detalhes completos
+  static Future<Map<String, dynamic>?> getRecipeById(String recipeId) async {
+    try {
+      final response = await client
+          .from('receitas')
+          .select('''
+            *,
+            categoria:categorias(*),
+            autor:profiles(nome, foto_url),
+            ingredientes(*)
+          ''')
+          .eq('id', recipeId)
+          .single();
+
+      return response;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // ==========================================
+  // STORAGE (IMAGENS)
+  // ==========================================
+
+  /// Faz upload de uma imagem para o Storage do Supabase
+  static Future<String?> uploadImage(File imageFile, {String? customName}) async {
+    if (currentUser == null) {
+      throw Exception('Usuário não autenticado');
+    }
+
+    try {
+      // Gerar nome único para a imagem
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final userId = currentUser!.id;
+      final fileName = customName ?? 'recipe_$userId\_$timestamp.jpg';
+
+      // Upload para o bucket 'recipe-images'
+      final response = await client.storage
+          .from('recipe-images')
+          .upload(fileName, imageFile);
+
+      if (response.isNotEmpty) {
+        // Retornar URL pública da imagem
+        final imageUrl = client.storage
+            .from('recipe-images')
+            .getPublicUrl(fileName);
+        return imageUrl;
+      }
+      return null;
+    } catch (e) {
+      throw Exception('Erro ao fazer upload da imagem: $e');
+    }
+  }
+
+  /// Seleciona imagem da galeria
+  static Future<File?> pickImageFromGallery() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+
+    if (pickedFile != null) {
+      return File(pickedFile.path);
+    }
+    return null;
+  }
+
+  /// Tira foto com a câmera
+  static Future<File?> pickImageFromCamera() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.camera);
+
+    if (pickedFile != null) {
+      return File(pickedFile.path);
+    }
+    return null;
   }
 }

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'dart:io';
 import '../../widgets/custom_text_field.dart';
 import '../../widgets/custom_button.dart';
+import '../../services/supabase_service.dart';
 
 class CreateRecipeScreen extends StatefulWidget {
   const CreateRecipeScreen({super.key});
@@ -23,7 +25,7 @@ class _CreateRecipeScreenState extends State<CreateRecipeScreen> {
   String _selectedCategory = 'Doces';
   String _selectedDifficulty = 'Fácil';
   
-  final List<String> _categories = [
+  List<String> _categories = [
     'Doces',
     'Salgados',
     'Bebidas',
@@ -32,8 +34,32 @@ class _CreateRecipeScreenState extends State<CreateRecipeScreen> {
     'Entradas',
     'Acompanhamentos',
   ];
-  
+
   final List<String> _difficulties = ['Fácil', 'Médio', 'Difícil'];
+
+  bool _isLoading = false;
+  bool _isLoadingCategories = true;
+
+  File? _selectedImage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCategories();
+  }
+
+  Future<void> _loadCategories() async {
+    try {
+      final categoriesData = await SupabaseService.getCategories();
+      setState(() {
+        _categories = categoriesData.map((cat) => cat['nome'] as String).toList();
+        _isLoadingCategories = false;
+      });
+    } catch (e) {
+      // Em caso de erro, manter as categorias padrão
+      setState(() => _isLoadingCategories = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -82,35 +108,157 @@ class _CreateRecipeScreenState extends State<CreateRecipeScreen> {
     }
   }
 
-  void _saveRecipe() {
+  Future<void> _saveRecipe() async {
     if (_formKey.currentState!.validate()) {
-      // Aqui seria implementada a lógica para salvar a receita
-      // Por enquanto, apenas mostramos uma mensagem de sucesso
-      
-      // Dados da receita que seriam enviados para o backend:
-      // - Título: _titleController.text
-      // - Descrição: _descriptionController.text
-      // - Tempo: _preparationTimeController.text
-      // - Porções: _servingsController.text
-      // - Categoria: _selectedCategory
-      // - Dificuldade: _selectedDifficulty
-      // - Ingredientes: _ingredientControllers.map((c) => c.text.trim()).where((t) => t.isNotEmpty).toList()
-      // - Instruções: _instructionControllers.map((c) => c.text.trim()).where((t) => t.isNotEmpty).toList()
+      // Mostrar loading
+      setState(() => _isLoading = true);
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Receita criada com sucesso!'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      try {
+        // Upload da imagem se foi selecionada
+        String? imageUrl;
+        if (_selectedImage != null) {
+          imageUrl = await SupabaseService.uploadImage(_selectedImage!);
+        }
 
-      // Simular um delay e retornar à tela anterior
-      Future.delayed(const Duration(seconds: 1), () {
+        // Preparar dados dos ingredientes
+        final ingredients = _ingredientControllers
+            .map((controller) => controller.text.trim())
+            .where((text) => text.isNotEmpty)
+            .map((ingredient) {
+              // Tentar separar quantidade do nome do ingrediente
+              final parts = ingredient.split(' ');
+              if (parts.length > 1 && _isQuantity(parts[0])) {
+                final quantity = parts.sublist(0, 2).join(' '); // Pegar primeira palavra (possivelmente com unidade)
+                final name = parts.sublist(2).join(' '); // Restante é o nome
+                return {'nome': name, 'quantidade': quantity};
+              } else {
+                return {'nome': ingredient, 'quantidade': null};
+              }
+            })
+            .toList();
+
+        // Preparar dados das instruções (modo de preparo)
+        final instructions = _instructionControllers
+            .map((controller) => controller.text.trim())
+            .where((text) => text.isNotEmpty)
+            .toList();
+
+        // Criar receita no Supabase
+        await SupabaseService.createRecipeWithIngredients(
+          titulo: _titleController.text.trim(),
+          descricao: _descriptionController.text.trim(),
+          modoPreparo: instructions.join('\n\n'),
+          tempoPreparo: int.parse(_preparationTimeController.text),
+          porcoes: int.parse(_servingsController.text),
+          dificuldade: _selectedDifficulty,
+          categoriaNome: _selectedCategory,
+          fotoUrl: imageUrl,
+          ingredientes: ingredients,
+        );
+
         if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Receita criada com sucesso!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+
+          // Voltar para a tela anterior
           context.pop();
         }
-      });
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Erro ao criar receita: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+      }
     }
+  }
+
+  bool _isQuantity(String text) {
+    // Verificar se o texto parece ser uma quantidade (número seguido opcionalmente de unidade)
+    final regex = RegExp(r'^\d+([.,]\d+)?\s*(g|kg|ml|l|colher|xic|unidade|xíc|copo|copos?|un|und)?$');
+    return regex.hasMatch(text.toLowerCase());
+  }
+
+  Future<void> _pickImageFromGallery() async {
+    try {
+      final image = await SupabaseService.pickImageFromGallery();
+      if (image != null) {
+        setState(() => _selectedImage = image);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao selecionar imagem: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _pickImageFromCamera() async {
+    try {
+      final image = await SupabaseService.pickImageFromCamera();
+      if (image != null) {
+        setState(() => _selectedImage = image);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao tirar foto: $e')),
+        );
+      }
+    }
+  }
+
+
+  void _showImagePickerOptions() {
+    showModalBottomSheet(
+      context: context,
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Galeria'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _pickImageFromGallery();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_camera),
+                title: const Text('Câmera'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  _pickImageFromCamera();
+                },
+              ),
+              if (_selectedImage != null) ...[
+                ListTile(
+                  leading: const Icon(Icons.delete, color: Colors.red),
+                  title: const Text('Remover imagem', style: TextStyle(color: Colors.red)),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    setState(() => _selectedImage = null);
+                  },
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -165,7 +313,53 @@ class _CreateRecipeScreenState extends State<CreateRecipeScreen> {
                 },
               ),
               const SizedBox(height: 24),
-              
+
+              // Imagem da receita
+              _buildSectionTitle('Foto da Receita (Opcional)'),
+              const SizedBox(height: 16),
+
+              GestureDetector(
+                onTap: _showImagePickerOptions,
+                child: Container(
+                  height: 200,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey[300]!, width: 2),
+                    borderRadius: BorderRadius.circular(12),
+                    color: Colors.grey[50],
+                  ),
+                  child: _selectedImage != null
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: Image.file(
+                            _selectedImage!,
+                            fit: BoxFit.cover,
+                            width: double.infinity,
+                            height: double.infinity,
+                          ),
+                        )
+                      : Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.add_a_photo,
+                              size: 48,
+                              color: Colors.grey[400],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Toque para adicionar foto',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 16,
+                              ),
+                            ),
+                          ],
+                        ),
+                ),
+              ),
+              const SizedBox(height: 24),
+
               // Detalhes da receita
               _buildSectionTitle('Detalhes'),
               const SizedBox(height: 16),
@@ -216,13 +410,15 @@ class _CreateRecipeScreenState extends State<CreateRecipeScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: _buildDropdown(
-                      'Categoria',
-                      _selectedCategory,
-                      _categories,
-                      Icons.category,
-                      (value) => setState(() => _selectedCategory = value!),
-                    ),
+                    child: _isLoadingCategories
+                        ? const Center(child: CircularProgressIndicator())
+                        : _buildDropdown(
+                            'Categoria',
+                            _selectedCategory,
+                            _categories,
+                            Icons.category,
+                            (value) => setState(() => _selectedCategory = value!),
+                          ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
@@ -272,9 +468,9 @@ class _CreateRecipeScreenState extends State<CreateRecipeScreen> {
               
               // Botão salvar
               CustomButton(
-                text: 'Salvar Receita',
-                onPressed: _saveRecipe,
-                icon: Icons.save,
+                text: _isLoading ? 'Salvando...' : 'Salvar Receita',
+                onPressed: _isLoading ? null : _saveRecipe,
+                icon: _isLoading ? Icons.hourglass_empty : Icons.save,
               ),
               const SizedBox(height: 16),
             ],
