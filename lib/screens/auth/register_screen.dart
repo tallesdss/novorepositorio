@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import '../../providers/auth_provider.dart';
 import '../../widgets/custom_text_field.dart';
 import '../../widgets/custom_button.dart';
@@ -20,6 +22,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _confirmPasswordController = TextEditingController();
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  File? _selectedImage;
+  final ImagePicker _imagePicker = ImagePicker();
 
   @override
   void dispose() {
@@ -28,6 +32,76 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final XFile? pickedFile = await _imagePicker.pickImage(
+        source: source,
+        maxWidth: 512,
+        maxHeight: 512,
+        imageQuality: 80,
+      );
+      
+      if (pickedFile != null) {
+        setState(() {
+          _selectedImage = File(pickedFile.path);
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erro ao selecionar imagem: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showImageSourceDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Selecionar foto'),
+          content: const Text('Escolha a fonte da sua foto de perfil:'),
+          actions: [
+            TextButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _pickImage(ImageSource.camera);
+              },
+              icon: const Icon(Icons.camera_alt),
+              label: const Text('Câmera'),
+            ),
+            TextButton.icon(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _pickImage(ImageSource.gallery);
+              },
+              icon: const Icon(Icons.photo_library),
+              label: const Text('Galeria'),
+            ),
+            if (_selectedImage != null)
+              TextButton.icon(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  setState(() {
+                    _selectedImage = null;
+                  });
+                },
+                icon: const Icon(Icons.delete),
+                label: const Text('Remover'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.red,
+                ),
+              ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _handleRegister() async {
@@ -100,11 +174,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       CircleAvatar(
                         radius: 50,
                         backgroundColor: Colors.grey[200],
-                        child: Icon(
-                          Icons.person,
-                          size: 50,
-                          color: Colors.grey[400],
-                        ),
+                        backgroundImage: _selectedImage != null 
+                          ? FileImage(_selectedImage!) 
+                          : null,
+                        child: _selectedImage == null 
+                          ? Icon(
+                              Icons.person,
+                              size: 50,
+                              color: Colors.grey[400],
+                            )
+                          : null,
                       ),
                       Positioned(
                         bottom: 0,
@@ -120,14 +199,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               color: Colors.white,
                               size: 20,
                             ),
-                            onPressed: () {
-                              // TODO: Implementar seleção de imagem
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Funcionalidade será implementada em breve'),
-                                ),
-                              );
-                            },
+                            onPressed: _showImageSourceDialog,
                           ),
                         ),
                       ),
