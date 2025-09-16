@@ -108,15 +108,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     final authProvider = context.read<AuthProvider>();
-    
-    await authProvider.register(
+    final success = await authProvider.register(
       _nameController.text.trim(),
       _emailController.text.trim(),
       _passwordController.text,
+      _confirmPasswordController.text,
     );
 
     if (mounted) {
-      if (authProvider.isAuthenticated) {
+      if (success && authProvider.isAuthenticated) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Conta criada com sucesso!'),
+            backgroundColor: Colors.green,
+          ),
+        );
         context.go('/home');
       } else if (authProvider.errorMessage != null) {
         ScaffoldMessenger.of(context).showSnackBar(

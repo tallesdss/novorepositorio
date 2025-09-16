@@ -29,14 +29,13 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     final authProvider = context.read<AuthProvider>();
-    
-    await authProvider.login(
+    final success = await authProvider.login(
       _emailController.text.trim(),
       _passwordController.text,
     );
 
     if (mounted) {
-      if (authProvider.isAuthenticated) {
+      if (success && authProvider.isAuthenticated) {
         context.go('/home');
       } else if (authProvider.errorMessage != null) {
         ScaffoldMessenger.of(context).showSnackBar(

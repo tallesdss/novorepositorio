@@ -97,18 +97,18 @@ Criar um aplicativo de receitas com autenticação, publicação de receitas com
 ## ✅ FASE 2: BACKEND + LÓGICA
 
 ### Supabase
-- [ ] Configuração inicial (Auth + Database + Storage)  
-- [ ] Definição das tabelas  
+- [x] Configuração inicial (Auth + Database + Storage)  
+- [x] Definição das tabelas  
 
 ### Autenticação e Perfil
-- [ ] Cadastro, login, logout  
-- [ ] Recuperação de senha  
-- [ ] Edição de perfil (nome, bio, foto)  
+- [x] Cadastro, login, logout
+- [x] Recuperação de senha
+- [x] Edição de perfil (nome, bio, foto)  
 
 ### Receitas
 - [ ] CRUD de receitas  
 - [ ] Upload de imagem (câmera/galeria → Supabase Storage)  
-- [ ] Categorias de receitas  
+- [x] Categorias de receitas  
 
 ### Funcionalidades Sociais
 - [ ] Favoritar receitas  
@@ -129,10 +129,10 @@ Criar um aplicativo de receitas com autenticação, publicação de receitas com
 ---
 
 ## 📊 Progresso
-- Total de tarefas: **45**  
-- Concluídas: **24**  
-- Em andamento: **0**  
-- Restantes: **21**
+- Total de tarefas: **45**
+- Concluídas: **27**
+- Em andamento: **0**
+- Restantes: **18**
 
 ---
 

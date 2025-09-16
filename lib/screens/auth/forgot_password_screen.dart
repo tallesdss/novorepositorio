@@ -27,15 +27,20 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     final authProvider = context.read<AuthProvider>();
-    
-    await authProvider.resetPassword(_emailController.text.trim());
+    final success = await authProvider.resetPassword(_emailController.text.trim());
 
     if (mounted) {
-      if (authProvider.errorMessage == null) {
+      if (success) {
         setState(() {
           _emailSent = true;
         });
-      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Link de recuperação enviado! Verifique seu e-mail.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else if (authProvider.errorMessage != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(authProvider.errorMessage!),
