@@ -18,7 +18,7 @@ class HomeScreen extends StatelessWidget {
                 child: CircleAvatar(
                   backgroundColor: Theme.of(context).primaryColor,
                   child: Text(
-                    authProvider.currentUser?['name']?.substring(0, 1).toUpperCase() ?? 'U',
+                    authProvider.userProfile?['nome']?.substring(0, 1).toUpperCase() ?? 'U',
                     style: const TextStyle(color: Colors.white),
                   ),
                 ),
@@ -70,7 +70,7 @@ class HomeScreen extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Olá, ${authProvider.currentUser?['name'] ?? 'Usuário'}!',
+                        'Olá, ${authProvider.userProfile?['nome'] ?? 'Usuário'}!',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 24,

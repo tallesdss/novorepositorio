@@ -18,13 +18,13 @@ class ProfileScreen extends StatelessWidget {
       ),
       body: Consumer<AuthProvider>(
         builder: (context, authProvider, child) {
-          final user = authProvider.currentUser;
-          
-          if (user == null) {
+          if (!authProvider.isAuthenticated) {
             return const Center(
-              child: Text('Usuário não encontrado'),
+              child: Text('Usuário não autenticado'),
             );
           }
+
+          final userProfile = authProvider.userProfile;
 
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -35,7 +35,7 @@ class ProfileScreen extends StatelessWidget {
                   radius: 60,
                   backgroundColor: Theme.of(context).primaryColor,
                   child: Text(
-                    user['name']?.substring(0, 1).toUpperCase() ?? 'U',
+                    userProfile?['nome']?.substring(0, 1).toUpperCase() ?? 'U',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 48,
@@ -45,22 +45,22 @@ class ProfileScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  user['name'] ?? 'Usuário',
+                  userProfile?['nome'] ?? 'Usuário',
                   style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  user['email'] ?? '',
+                  userProfile?['email'] ?? '',
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: Colors.grey[600],
                   ),
                 ),
-                if (user['bio'] != null && user['bio'].isNotEmpty) ...[
+                if (userProfile?['bio'] != null && userProfile!['bio'].isNotEmpty) ...[
                   const SizedBox(height: 8),
                   Text(
-                    user['bio'],
+                    userProfile['bio'],
                     style: Theme.of(context).textTheme.bodyMedium,
                     textAlign: TextAlign.center,
                   ),
