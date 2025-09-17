@@ -7,8 +7,7 @@ import '../screens/profile/profile_screen.dart';
 import '../screens/profile/edit_profile_screen.dart';
 import '../screens/recipes/recipes_list_screen.dart';
 import '../screens/recipes/recipe_detail_screen.dart';
-import '../screens/recipes/create_recipe_screen.dart';
-import '../screens/recipes/edit_recipe_screen.dart';
+import '../screens/recipes/recipe_form_screen.dart';
 import '../screens/recipes/my_recipes_screen.dart';
 import '../screens/search/search_screen.dart';
 
@@ -67,14 +66,14 @@ class AppRouter {
       GoRoute(
         path: '/create-recipe',
         name: 'create-recipe',
-        builder: (context, state) => const CreateRecipeScreen(),
+        builder: (context, state) => const RecipeFormScreen(),
       ),
       GoRoute(
         path: '/edit-recipe/:id',
         name: 'edit-recipe',
         builder: (context, state) {
           final recipeId = state.pathParameters['id']!;
-          return EditRecipeScreen(recipeId: recipeId);
+          return RecipeFormScreen(recipeId: recipeId);
         },
       ),
       GoRoute(

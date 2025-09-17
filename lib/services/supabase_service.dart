@@ -308,6 +308,207 @@ class SupabaseService {
     }
   }
 
+  /// Busca todas as receitas públicas
+  static Future<List<Map<String, dynamic>>> getPublicRecipes({int limit = 50, int offset = 0}) async {
+    final response = await client
+        .from('receitas')
+        .select('''
+          *,
+          categoria:categorias(nome),
+          autor:profiles(nome, foto_url),
+          ingredientes(count)
+        ''')
+        .eq('publico', true)
+        .order('created_at', ascending: false)
+        .range(offset, offset + limit - 1);
+
+    return List<Map<String, dynamic>>.from(response);
+  }
+
+  /// Busca receitas por categoria
+  static Future<List<Map<String, dynamic>>> getRecipesByCategory(String categoryName, {int limit = 50}) async {
+    final response = await client
+        .from('receitas')
+        .select('''
+          *,
+          categoria:categorias(nome),
+          autor:profiles(nome, foto_url),
+          ingredientes(count)
+        ''')
+        .eq('publico', true)
+        .eq('categoria.nome', categoryName)
+        .order('created_at', ascending: false)
+        .limit(limit);
+
+    return List<Map<String, dynamic>>.from(response);
+  }
+
+  /// Busca receitas por termo de busca
+  static Future<List<Map<String, dynamic>>> searchRecipes(String query, {int limit = 50}) async {
+    final response = await client
+        .from('receitas')
+        .select('''
+          *,
+          categoria:categorias(nome),
+          autor:profiles(nome, foto_url),
+          ingredientes(count)
+        ''')
+        .eq('publico', true)
+        .or('titulo.ilike.%$query%,descricao.ilike.%$query%')
+        .order('created_at', ascending: false)
+        .limit(limit);
+
+    return List<Map<String, dynamic>>.from(response);
+  }
+
+  /// Atualiza uma receita existente
+  static Future<Map<String, dynamic>> updateRecipe({
+    required String recipeId,
+    String? titulo,
+    String? descricao,
+    String? modoPreparo,
+    int? tempoPreparo,
+    int? porcoes,
+    String? dificuldade,
+    String? fotoUrl,
+    String? categoriaNome,
+    bool? publico,
+  }) async {
+    if (currentUser == null) {
+      throw Exception('Usuário não autenticado');
+    }
+
+    // Verificar se o usuário é o autor da receita
+    final existingRecipe = await getRecipeById(recipeId);
+    if (existingRecipe == null) {
+      throw Exception('Receita não encontrada');
+    }
+
+    if (existingRecipe['autor_id'] != currentUser!.id) {
+      throw Exception('Você não tem permissão para editar esta receita');
+    }
+
+    final updates = <String, dynamic>{};
+    if (titulo != null) updates['titulo'] = titulo;
+    if (descricao != null) updates['descricao'] = descricao;
+    if (modoPreparo != null) updates['modo_preparo'] = modoPreparo;
+    if (tempoPreparo != null) updates['tempo_preparo'] = tempoPreparo;
+    if (porcoes != null) updates['porcoes'] = porcoes;
+    if (dificuldade != null) updates['dificuldade'] = dificuldade;
+    if (fotoUrl != null) updates['foto_url'] = fotoUrl;
+    if (publico != null) updates['publico'] = publico;
+
+    if (categoriaNome != null) {
+      final categoria = await getCategoryByName(categoriaNome);
+      if (categoria == null) {
+        throw Exception('Categoria não encontrada: $categoriaNome');
+      }
+      updates['categoria_id'] = categoria['id'];
+    }
+
+    updates['updated_at'] = DateTime.now().toIso8601String();
+
+    final response = await client
+        .from('receitas')
+        .update(updates)
+        .eq('id', recipeId)
+        .select()
+        .single();
+
+    return response;
+  }
+
+  /// Atualiza ingredientes de uma receita
+  static Future<void> updateRecipeIngredients(
+    String recipeId,
+    List<Map<String, dynamic>> ingredients,
+  ) async {
+    if (currentUser == null) {
+      throw Exception('Usuário não autenticado');
+    }
+
+    // Primeiro, remover todos os ingredientes existentes
+    await client
+        .from('ingredientes')
+        .delete()
+        .eq('receita_id', recipeId);
+
+    // Adicionar os novos ingredientes
+    if (ingredients.isNotEmpty) {
+      final ingredientsData = ingredients.asMap().entries.map((entry) {
+        return {
+          'receita_id': recipeId,
+          'nome': entry.value['nome'],
+          'quantidade': entry.value['quantidade'],
+          'ordem': entry.key + 1,
+        };
+      }).toList();
+
+      await client
+          .from('ingredientes')
+          .insert(ingredientsData);
+    }
+  }
+
+  /// Exclui uma receita
+  static Future<void> deleteRecipe(String recipeId) async {
+    if (currentUser == null) {
+      throw Exception('Usuário não autenticado');
+    }
+
+    // Verificar se o usuário é o autor da receita
+    final existingRecipe = await getRecipeById(recipeId);
+    if (existingRecipe == null) {
+      throw Exception('Receita não encontrada');
+    }
+
+    if (existingRecipe['autor_id'] != currentUser!.id) {
+      throw Exception('Você não tem permissão para excluir esta receita');
+    }
+
+    // Excluir a receita (os ingredientes serão excluídos automaticamente devido às constraints)
+    await client
+        .from('receitas')
+        .delete()
+        .eq('id', recipeId);
+  }
+
+  /// Atualiza receita completa (receita + ingredientes)
+  static Future<Map<String, dynamic>> updateRecipeWithIngredients({
+    required String recipeId,
+    String? titulo,
+    String? descricao,
+    String? modoPreparo,
+    int? tempoPreparo,
+    int? porcoes,
+    String? dificuldade,
+    String? fotoUrl,
+    String? categoriaNome,
+    List<Map<String, dynamic>>? ingredientes,
+    bool? publico,
+  }) async {
+    // Atualizar receita
+    final recipe = await updateRecipe(
+      recipeId: recipeId,
+      titulo: titulo,
+      descricao: descricao,
+      modoPreparo: modoPreparo,
+      tempoPreparo: tempoPreparo,
+      porcoes: porcoes,
+      dificuldade: dificuldade,
+      fotoUrl: fotoUrl,
+      categoriaNome: categoriaNome,
+      publico: publico,
+    );
+
+    // Atualizar ingredientes se fornecidos
+    if (ingredientes != null) {
+      await updateRecipeIngredients(recipeId, ingredientes);
+    }
+
+    return recipe;
+  }
+
   // ==========================================
   // STORAGE (IMAGENS)
   // ==========================================
@@ -322,7 +523,7 @@ class SupabaseService {
       // Gerar nome único para a imagem
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final userId = currentUser!.id;
-      final fileName = customName ?? 'recipe_$userId\_$timestamp.jpg';
+      final fileName = customName ?? 'recipe_${userId}_$timestamp.jpg';
 
       // Upload para o bucket 'recipe-images'
       final response = await client.storage
